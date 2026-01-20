@@ -6025,14 +6025,42 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
         # Set SIM parameter after reboot when AIS sim is loaded
         self.set_parameter("SIM_AIS_COUNT", 5)
 
-        self.delay_sim_time(10)
-
         m = self.assert_receive_message('AIS_VESSEL', timeout=60)
 
         if m.MMSI == 0:
             raise NotAchievedException("Invalid MMSI")
 
         self.progress("Received AIS vessel MMSI=%u" % m.MMSI)
+
+    def AISMultipleVessels(self):
+        '''Test tracking multiple AIS vessels'''
+        self.customise_SITL_commandline([
+            "--serial5=sim:AIS",
+        ])
+        self.set_parameters({
+            "SERIAL5_PROTOCOL": 40,
+            "SERIAL5_BAUD": 38,
+            "AIS_TYPE": 1,
+        })
+        self.reboot_sitl()
+
+        self.set_parameter("SIM_AIS_COUNT", 5)
+
+        # Collect unique vessel MMSIs
+        vessels_seen = set()
+        start_time = self.get_sim_time()
+
+        while len(vessels_seen) < 5:
+            if self.get_sim_time() - start_time > 60:
+                raise NotAchievedException(
+                    "Only saw %d vessels, expected 5" % len(vessels_seen)
+                )
+
+            m = self.assert_receive_message('AIS_VESSEL', timeout=10)
+            vessels_seen.add(m.MMSI)
+            self.progress("Vessel %d: MMSI=%u" % (len(vessels_seen), m.MMSI))
+
+        self.progress("Successfully tracked 5 unique vessels")
 
     def DepthFinder(self):
         '''Test multiple depthfinders for boats'''
@@ -7239,6 +7267,7 @@ return update()
             self.AccelCal,
             self.RangeFinder,
             self.AIS,
+            self.AISMultipleVessels,
             self.AP_Proximity_MAV,
             self.EndMissionBehavior,
             self.FlashStorage,
