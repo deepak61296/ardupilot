@@ -1228,6 +1228,12 @@ const AP_Param::GroupInfo ParametersG2::var_info2[] = {
     AP_GROUPINFO("TUNE2", 13, ParametersG2, rc_tuning2_param, 0),
 #endif  // AP_RC_TRANSMITTER_TUNING_ENABLED
 
+#if AP_COMPANION_HEALTH_ENABLED
+    // @Group: CC_
+    // @Path: ../libraries/AP_CompanionHealth/AP_CompanionHealth.cpp
+    AP_SUBGROUPINFO(companion_health, "CC_", 14, ParametersG2, AP_CompanionHealth),
+#endif
+
     // ID 62 is reserved for the AP_SUBGROUPEXTENSION
 
     AP_GROUPEND

@@ -5,6 +5,7 @@
 #include <AP_Common/AP_Common.h>
 #include "RC_Channel_Copter.h"
 #include <AP_Proximity/AP_Proximity.h>
+#include <AP_CompanionHealth/AP_CompanionHealth.h>
 
 #if MODE_FOLLOW_ENABLED
  # include <AP_Follow/AP_Follow.h>
@@ -701,6 +702,11 @@ public:
     AP_Float rc_tuning2_min;
     AP_Float rc_tuning2_max;
 #endif  // AP_RC_TRANSMITTER_TUNING_ENABLED
+
+#if AP_COMPANION_HEALTH_ENABLED
+    // companion computer health monitoring
+    AP_CompanionHealth companion_health;
+#endif
 };
 
 extern const AP_Param::Info        var_info[];
