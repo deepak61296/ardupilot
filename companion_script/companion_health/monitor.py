@@ -15,6 +15,12 @@ from .config import Config
 
 log = logging.getLogger(__name__)
 
+# MAVLink component type for onboard computer
+MAV_TYPE_ONBOARD_CONTROLLER = 18
+MAV_AUTOPILOT_INVALID = 8
+MAV_MODE_FLAG_CUSTOM_MODE_ENABLED = 1
+MAV_STATE_ACTIVE = 4
+
 
 class HealthMonitor:
     """Monitors companion computer health and sends MAVLink messages."""
@@ -85,6 +91,28 @@ class HealthMonitor:
             log.error("Failed to connect: %s", e)
             return False
 
+    def send_heartbeat(self) -> bool:
+        """Send HEARTBEAT message to establish MAVLink connection.
+
+        Returns:
+            True if message sent successfully, False otherwise
+        """
+        if not self.mav:
+            return False
+
+        try:
+            self.mav.mav.heartbeat_send(
+                MAV_TYPE_ONBOARD_CONTROLLER,
+                MAV_AUTOPILOT_INVALID,
+                MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+                0,  # custom_mode
+                MAV_STATE_ACTIVE
+            )
+            return True
+        except Exception as e:
+            log.error("Failed to send heartbeat: %s", e)
+            return False
+
     def send_health(self) -> bool:
         """Collect metrics and send COMPANION_HEALTH message.
 
@@ -141,6 +169,7 @@ class HealthMonitor:
 
         while self.running:
             start = time.monotonic()
+            self.send_heartbeat()
             self.send_health()
             elapsed = time.monotonic() - start
             sleep_time = max(0, interval - elapsed)
