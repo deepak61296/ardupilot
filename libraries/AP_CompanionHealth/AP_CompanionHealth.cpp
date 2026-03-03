@@ -23,21 +23,21 @@
 AP_CompanionHealth *AP_CompanionHealth::_singleton;
 
 const AP_Param::GroupInfo AP_CompanionHealth::var_info[] = {
-    // @Param: _ENABLE
+    // @Param: ENABLE
     // @DisplayName: Companion Computer Failsafe Enable
     // @Description: Action to take when companion computer stops sending health messages. Uses same values as GCS failsafe.
     // @Values: 0:Disabled,1:RTL,2:Continue Mission in Auto,3:SmartRTL or RTL,4:SmartRTL or Land,5:Land,6:Auto DO_LAND_START or RTL,7:Brake or Land
     // @User: Standard
-    AP_GROUPINFO_FLAGS("_ENABLE", 1, AP_CompanionHealth, _fs_enable, 0, AP_PARAM_FLAG_ENABLE),
+    AP_GROUPINFO("ENABLE", 1, AP_CompanionHealth, _fs_enable, 0),
 
-    // @Param: _TIMEOUT
+    // @Param: TIMEOUT
     // @DisplayName: Companion Computer Failsafe Timeout
     // @Description: Time in seconds without companion health messages before failsafe triggers
     // @Units: s
     // @Range: 1 60
     // @Increment: 1
     // @User: Standard
-    AP_GROUPINFO("_TIMEOUT", 2, AP_CompanionHealth, _fs_timeout, 5),
+    AP_GROUPINFO("TIMEOUT", 2, AP_CompanionHealth, _fs_timeout, 5),
 
     AP_GROUPEND
 };
@@ -63,6 +63,9 @@ void AP_CompanionHealth::handle_message(const mavlink_message_t &msg)
     mavlink_companion_health_t packet;
     mavlink_msg_companion_health_decode(&msg, &packet);
 
+    // check if this is first connection
+    const bool was_never_connected = (_last_msg_ms == 0);
+
     // store status
     _status.services_status = packet.services_status;
     _status.watchdog_seq = packet.watchdog_seq;
@@ -76,6 +79,11 @@ void AP_CompanionHealth::handle_message(const mavlink_message_t &msg)
     _last_watchdog_seq = packet.watchdog_seq;
     _last_msg_ms = AP_HAL::millis();
     _healthy = true;
+
+    // announce first connection
+    if (was_never_connected) {
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Companion computer connected");
+    }
 }
 
 uint32_t AP_CompanionHealth::last_message_age_ms() const
