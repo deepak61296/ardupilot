@@ -49,6 +49,7 @@ AP_CompanionHealth::AP_CompanionHealth()
 
     // initialize state
     _last_msg_ms = 0;
+    _last_report_ms = 0;
     _last_watchdog_seq = 0;
     _healthy = false;
     memset(&_status, 0, sizeof(_status));
@@ -96,23 +97,27 @@ uint32_t AP_CompanionHealth::last_message_age_ms() const
 
 void AP_CompanionHealth::update()
 {
-    // disabled - nothing to do
-    if (_fs_enable <= 0) {
-        return;
-    }
-
-    // never connected - don't trigger failsafe
+    // never connected - nothing to do
     if (_last_msg_ms == 0) {
         return;
     }
 
+    const uint32_t now_ms = AP_HAL::millis();
     const uint32_t timeout_ms = uint32_t(_fs_timeout * 1000.0f);
     const uint32_t age_ms = last_message_age_ms();
 
+    // update healthy state
     if (age_ms > timeout_ms) {
         _healthy = false;
     } else {
         _healthy = true;
+    }
+
+    // send periodic status report every 10 seconds
+    if (now_ms - _last_report_ms >= 10000) {
+        _last_report_ms = now_ms;
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Companion: CPU %d%% Mem %d%% Temp %.1fC",
+                      _status.cpu_load, _status.memory_used, _status.temperature * 0.1f);
     }
 }
 

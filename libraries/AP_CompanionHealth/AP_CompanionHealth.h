@@ -79,6 +79,7 @@ private:
 
     // state
     uint32_t _last_msg_ms;          // timestamp of last received message
+    uint32_t _last_report_ms;       // timestamp of last GCS status report
     uint16_t _last_watchdog_seq;    // last received watchdog sequence
     bool _healthy;                  // true if receiving messages within timeout
     CompanionStatus _status;        // latest received status
