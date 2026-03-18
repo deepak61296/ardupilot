@@ -2,6 +2,9 @@
 
 A MAVLink-based health monitoring system for ArduPilot companion computers. Sends `COMPANION_HEALTH` messages (ID 11061) to the flight controller.
 
+> Note: This code is also available as a standalone repo at:
+> https://github.com/deepak61296/companion-health-monitor
+
 ## Features
 
 - **Cross-platform**: Raspberry Pi, Jetson Nano/Xavier/Orin, generic Linux
