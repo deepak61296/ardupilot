@@ -30,6 +30,14 @@ public:
     /* Do not allow copies */
     CLASS_NO_COPY(AP_CompanionHealth);
 
+    // health states (matches companion-side enum)
+    enum class State : uint8_t {
+        DISCONNECTED = 0,   // no messages or timed out
+        HEALTHY = 1,        // all metrics normal
+        DEGRADED = 2,       // warning thresholds exceeded
+        CRITICAL = 3        // critical thresholds exceeded
+    };
+
     // get singleton instance
     static AP_CompanionHealth *get_singleton() {
         return _singleton;
@@ -42,8 +50,11 @@ public:
     void update();
 
     // accessors for failsafe state
-    bool is_healthy() const { return _healthy; }
+    // returns true only for HEALTHY or DEGRADED, false for DISCONNECTED or CRITICAL
+    bool is_healthy() const { return _state == State::HEALTHY || _state == State::DEGRADED; }
     bool has_ever_connected() const { return _last_msg_ms > 0; }
+    State get_state() const { return _state; }
+    const char* get_state_name() const;
     uint32_t last_message_age_ms() const;
 
     // get failsafe enable parameter value (same values as GCS failsafe)
@@ -81,8 +92,11 @@ private:
     uint32_t _last_msg_ms;          // timestamp of last received message
     uint32_t _last_report_ms;       // timestamp of last GCS status report
     uint16_t _last_watchdog_seq;    // last received watchdog sequence
-    bool _healthy;                  // true if receiving messages within timeout
+    State _state;                   // current connection/health state
     CompanionStatus _status;        // latest received status
+
+    // update state based on current metrics
+    void update_state();
 };
 
 namespace AP {

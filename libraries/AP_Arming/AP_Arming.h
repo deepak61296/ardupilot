@@ -89,6 +89,7 @@ public:
         AUTO_ARM_ONCE = 36,
         TURTLE_MODE = 37,
         TOYMODE = 38,
+        COMPANIONFAILSAFE = 39,
         UNKNOWN = 100,
     };
 

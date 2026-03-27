@@ -2133,6 +2133,7 @@ void AP_Arming::check_forced_logging(const AP_Arming::Method method)
         case Method::PILOT_INPUT_FAILSAFE:
         case Method::DEADRECKON_FAILSAFE:
         case Method::BLACKBOX:
+        case Method::COMPANIONFAILSAFE:
             // keep logging for longer if disarmed for a bad reason
             AP::logger().set_long_log_persist(true);
             return;

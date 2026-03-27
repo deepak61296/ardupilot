@@ -51,8 +51,19 @@ AP_CompanionHealth::AP_CompanionHealth()
     _last_msg_ms = 0;
     _last_report_ms = 0;
     _last_watchdog_seq = 0;
-    _healthy = false;
+    _state = State::DISCONNECTED;
     memset(&_status, 0, sizeof(_status));
+}
+
+const char* AP_CompanionHealth::get_state_name() const
+{
+    switch (_state) {
+        case State::DISCONNECTED: return "DISCONNECTED";
+        case State::HEALTHY:      return "HEALTHY";
+        case State::DEGRADED:     return "DEGRADED";
+        case State::CRITICAL:     return "CRITICAL";
+    }
+    return "UNKNOWN";
 }
 
 void AP_CompanionHealth::handle_message(const mavlink_message_t &msg)
@@ -79,12 +90,14 @@ void AP_CompanionHealth::handle_message(const mavlink_message_t &msg)
 
     _last_watchdog_seq = packet.watchdog_seq;
     _last_msg_ms = AP_HAL::millis();
-    _healthy = true;
 
     // announce first connection
     if (was_never_connected) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Companion computer connected");
     }
+
+    // update state based on metrics
+    update_state();
 }
 
 uint32_t AP_CompanionHealth::last_message_age_ms() const
@@ -93,6 +106,21 @@ uint32_t AP_CompanionHealth::last_message_age_ms() const
         return UINT32_MAX;
     }
     return AP_HAL::millis() - _last_msg_ms;
+}
+
+void AP_CompanionHealth::update_state()
+{
+    // check for critical conditions
+    const bool is_overheating = (_status.status_flags & STATUS_FLAG_OVERHEATING) != 0;
+    const bool any_flag_set = (_status.status_flags & 0x0F) != 0;
+
+    if (is_overheating || _status.cpu_load > 95 || _status.memory_used > 95 || _status.temperature > 900) {
+        _state = State::CRITICAL;
+    } else if (any_flag_set || _status.cpu_load > 80 || _status.memory_used > 80 || _status.temperature > 750) {
+        _state = State::DEGRADED;
+    } else {
+        _state = State::HEALTHY;
+    }
 }
 
 void AP_CompanionHealth::update()
@@ -106,18 +134,16 @@ void AP_CompanionHealth::update()
     const uint32_t timeout_ms = uint32_t(_fs_timeout * 1000.0f);
     const uint32_t age_ms = last_message_age_ms();
 
-    // update healthy state
+    // check for timeout
     if (age_ms > timeout_ms) {
-        _healthy = false;
-    } else {
-        _healthy = true;
+        _state = State::DISCONNECTED;
     }
 
     // send periodic status report every 10 seconds
     if (now_ms - _last_report_ms >= 10000) {
         _last_report_ms = now_ms;
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Companion: CPU %d%% Mem %d%% Temp %.1fC",
-                      _status.cpu_load, _status.memory_used, _status.temperature * 0.1f);
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Companion [%s]: CPU %d%% Mem %d%% Temp %.1fC",
+                      get_state_name(), _status.cpu_load, _status.memory_used, _status.temperature * 0.1f);
     }
 }
 

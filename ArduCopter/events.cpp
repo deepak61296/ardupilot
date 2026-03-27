@@ -244,6 +244,11 @@ void Copter::failsafe_gcs_off_event(void)
 // failsafe_companion_check - check for companion computer failsafe
 void Copter::failsafe_companion_check()
 {
+    // skip all processing if companion failsafe is disabled
+    if (g2.companion_health.get_failsafe_action() == 0) {
+        return;
+    }
+
     // update companion health state
     g2.companion_health.update();
 
@@ -269,7 +274,7 @@ void Copter::failsafe_companion_check()
 // failsafe_companion_on_event - actions to take when companion computer contact is lost
 void Copter::failsafe_companion_on_event()
 {
-    LOGGER_WRITE_ERROR(LogErrorSubsystem::FAILSAFE_GCS, LogErrorCode::FAILSAFE_OCCURRED);
+    LOGGER_WRITE_ERROR(LogErrorSubsystem::FAILSAFE_COMPANION, LogErrorCode::FAILSAFE_OCCURRED);
     RC_Channels::clear_overrides();
 
     // convert the desired failsafe response to the FailsafeAction enum
@@ -308,7 +313,7 @@ void Copter::failsafe_companion_on_event()
         announce_failsafe("Companion");
 
     } else if (should_disarm_on_failsafe()) {
-        arming.disarm(AP_Arming::Method::GCSFAILSAFE);
+        arming.disarm(AP_Arming::Method::COMPANIONFAILSAFE);
         desired_action = FailsafeAction::NONE;
         announce_failsafe("Companion", "Disarming");
 
@@ -320,14 +325,14 @@ void Copter::failsafe_companion_on_event()
         announce_failsafe("Companion");
     }
 
-    do_failsafe_action(desired_action, ModeReason::GCS_FAILSAFE);
+    do_failsafe_action(desired_action, ModeReason::COMPANION_FAILSAFE);
 }
 
 // failsafe_companion_off_event - actions to take when companion computer contact is restored
 void Copter::failsafe_companion_off_event()
 {
     gcs().send_text(MAV_SEVERITY_WARNING, "Companion Failsafe Cleared");
-    LOGGER_WRITE_ERROR(LogErrorSubsystem::FAILSAFE_GCS, LogErrorCode::FAILSAFE_RESOLVED);
+    LOGGER_WRITE_ERROR(LogErrorSubsystem::FAILSAFE_COMPANION, LogErrorCode::FAILSAFE_RESOLVED);
 }
 #endif  // AP_COMPANION_HEALTH_ENABLED
 
