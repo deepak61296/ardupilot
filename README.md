@@ -1,4 +1,39 @@
-# ArduPilot Project
+# ArduPilot Project - Companion Computer Health Monitor Branch
+
+> **This is a development branch for GSoC 2026: Companion Computer Health Monitoring and Failsafe**
+
+[![Demo Video](https://img.youtube.com/vi/s6RZwZTwf14/maxresdefault.jpg)](https://www.youtube.com/watch?v=s6RZwZTwf14)
+
+**[Watch Demo Video](https://www.youtube.com/watch?v=s6RZwZTwf14)** - Shows failsafe triggering when companion stops responding.
+
+---
+
+## Changes in This Branch
+
+This branch adds **AP_CompanionHealth** library for real-time companion computer health monitoring. Changes made:
+
+### New Library
+- `libraries/AP_CompanionHealth/AP_CompanionHealth.h` - Header with state machine and parameters
+- `libraries/AP_CompanionHealth/AP_CompanionHealth.cpp` - Message handling, timeout detection, failsafe logic
+
+### MAVLink Message
+- `modules/mavlink/message_definitions/v1.0/ardupilotmega.xml` - Added COMPANION_HEALTH message (ID 11061)
+
+### ArduCopter Integration
+- `ArduCopter/Copter.h` - Added companion_health member to g2
+- `ArduCopter/Parameters.cpp` - Registered CCH parameters
+- `ArduCopter/events.cpp` - Added failsafe_companion_check() and event handlers
+
+### Parameters Added
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| CCH_ENABLE | 0 | Failsafe action: 0=Disabled, 1=RTL, 2=Continue, 3=SmartRTL, 4=SmartRTL/Land, 5=Land |
+| CCH_TIMEOUT | 5.0 | Seconds without message before failsafe |
+
+### Companion Script
+See [companion-health-monitor](https://github.com/deepak61296/companion-health-monitor) for the Python script that sends health messages.
+
+---
 
 <a href="https://ardupilot.org/discord"><img src="https://img.shields.io/discord/674039678562861068.svg" alt="Discord">
 
