@@ -1278,6 +1278,113 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.set_parameter('FS_OPTIONS', 0)
         self.progress("All GCS failsafe tests complete")
 
+    def CompanionHealthFailsafe(self, timeout=180):
+        '''Test Companion Computer Health Failsafe'''
+        self.context_push()
+        self.set_parameters({
+            "CCH_ENABLE": 0,
+            "CCH_TIMEOUT": 3,
+        })
+
+        # Constants for raw packet
+        MAVLINK_MSG_ID_COMPANION_HEALTH = 11061
+        COMPANION_HEALTH_CRC_EXTRA = 81
+        companion_health_seq = [0]
+
+        def send_companion_health(status_flags=0):
+            """Send COMPANION_HEALTH as raw MAVLink2 packet."""
+            import struct
+            payload = struct.pack(
+                '<IHhBBBBB',
+                0xFFFFFFFF,
+                companion_health_seq[0],
+                450,
+                30, 40, 50, 255,
+                status_flags
+            )
+            companion_health_seq[0] = (companion_health_seq[0] + 1) % 65536
+
+            seq = self.mav.mav.seq
+            self.mav.mav.seq = (seq + 1) % 256
+
+            header = struct.pack(
+                '<BBBBBBBHB',
+                0xFD, len(payload), 0, 0, seq,
+                self.mav.mav.srcSystem,
+                self.mav.mav.srcComponent,
+                MAVLINK_MSG_ID_COMPANION_HEALTH & 0xFFFF,
+                (MAVLINK_MSG_ID_COMPANION_HEALTH >> 16) & 0xFF
+            )
+
+            crc = mavutil.x25crc(header[1:])
+            crc.accumulate(payload)
+            crc.accumulate_str(chr(COMPANION_HEALTH_CRC_EXTRA))
+            self.mav.write(header + payload + struct.pack('<H', crc.crc))
+
+        def send_health_for_seconds(seconds, status_flags=0):
+            """Send health messages at 1Hz for given duration."""
+            tstart = self.get_sim_time()
+            while self.get_sim_time() - tstart < seconds:
+                send_companion_health(status_flags)
+                self.delay_sim_time(1)
+
+        # Test 1: Disabled failsafe should take no action
+        self.start_subtest("CCH failsafe disabled: CCH_ENABLE=0")
+        self.set_parameter("CCH_ENABLE", 0)
+        send_health_for_seconds(3)
+        self.takeoffAndMoveAway()
+        send_health_for_seconds(2)
+        # Stop sending for 5s, should NOT trigger failsafe
+        self.delay_sim_time(5)
+        self.assert_mode("ALT_HOLD")
+        self.end_subtest("Completed CCH disabled test")
+
+        # Test 2: Timeout triggers RTL
+        self.start_subtest("CCH failsafe timeout: CCH_ENABLE=1")
+        # Re-establish healthy connection
+        send_health_for_seconds(3)
+        self.set_parameter("CCH_ENABLE", 1)
+        send_health_for_seconds(3)
+        # Stop sending to trigger timeout
+        self.wait_statustext("Companion Failsafe", timeout=10)
+        self.wait_mode("RTL")
+        self.end_subtest("Completed CCH timeout test")
+
+        # Test 3: Recovery clears failsafe
+        self.start_subtest("CCH failsafe recovery")
+        # Send health to trigger recovery
+        send_companion_health()
+        self.wait_statustext("Companion Failsafe Cleared", timeout=10)
+        send_health_for_seconds(2)
+        self.change_mode("LOITER")
+        self.end_subtest("Completed CCH recovery test")
+
+        # Test 4: CRITICAL state triggers failsafe
+        self.start_subtest("CCH failsafe CRITICAL state")
+        # Keep sending while waiting for disarm
+        tstart = self.get_sim_time()
+        while self.armed():
+            send_companion_health()
+            self.delay_sim_time(0.5)
+            if self.get_sim_time() - tstart > 120:
+                raise AutoTestTimeoutException("Failed to disarm")
+        send_health_for_seconds(2)
+        self.takeoffAndMoveAway()
+        send_health_for_seconds(2)
+        # Send OVERHEATING flag
+        send_companion_health(status_flags=0x02)
+        self.wait_statustext("Companion Failsafe", timeout=10)
+        self.wait_mode("RTL")
+        # Clear by sending healthy
+        send_companion_health(status_flags=0)
+        self.wait_statustext("Companion Failsafe Cleared", timeout=10)
+        self.land_and_disarm()
+        self.end_subtest("Completed CCH CRITICAL test")
+
+        self.set_parameter("CCH_ENABLE", 0)
+        self.context_pop()
+        self.progress("All CCH failsafe tests complete")
+
     def CustomController(self, timeout=300):
         '''Test Custom Controller'''
         self.progress("Configure custom controller parameters")
@@ -12791,6 +12898,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
              self.ThrottleFailsafe,
              self.ThrottleFailsafePassthrough,
              self.GCSFailsafe,
+             self.CompanionHealthFailsafe,
              self.CustomController,
              self.WPArcs,
              self.WPArcs2,
