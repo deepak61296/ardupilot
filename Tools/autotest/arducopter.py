@@ -1291,18 +1291,19 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         COMPANION_HEALTH_CRC_EXTRA = 81
         companion_health_seq = [0]
 
-        def send_companion_health(status_flags=0):
+        def send_companion_health(status_flags=0, services_status=0xFFFFFFFF, freeze_watchdog=False):
             """Send COMPANION_HEALTH as raw MAVLink2 packet."""
             import struct
             payload = struct.pack(
                 '<IHhBBBBB',
-                0xFFFFFFFF,
+                services_status,
                 companion_health_seq[0],
                 450,
                 30, 40, 50, 255,
                 status_flags
             )
-            companion_health_seq[0] = (companion_health_seq[0] + 1) % 65536
+            if not freeze_watchdog:
+                companion_health_seq[0] = (companion_health_seq[0] + 1) % 65536
 
             seq = self.mav.mav.seq
             self.mav.mav.seq = (seq + 1) % 256
@@ -1321,68 +1322,174 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             crc.accumulate_str(chr(COMPANION_HEALTH_CRC_EXTRA))
             self.mav.write(header + payload + struct.pack('<H', crc.crc))
 
-        def send_health_for_seconds(seconds, status_flags=0):
-            """Send health messages at 1Hz for given duration."""
-            tstart = self.get_sim_time()
-            while self.get_sim_time() - tstart < seconds:
-                send_companion_health(status_flags)
-                self.delay_sim_time(1)
+        # Thread variables for automatic background telemetry sending
+        import threading
+        import time
 
-        # Test 1: Disabled failsafe should take no action
-        self.start_subtest("CCH failsafe disabled: CCH_ENABLE=0")
-        self.set_parameter("CCH_ENABLE", 0)
-        send_health_for_seconds(3)
-        self.takeoffAndMoveAway()
-        send_health_for_seconds(2)
-        # Stop sending for 5s, should NOT trigger failsafe
-        self.delay_sim_time(5)
-        self.assert_mode("ALT_HOLD")
-        self.end_subtest("Completed CCH disabled test")
+        health_params = {
+            "status_flags": 0,
+            "services_status": 0xFFFFFFFF,
+            "freeze_watchdog": False,
+            "active": True
+        }
 
-        # Test 2: Timeout triggers RTL
-        self.start_subtest("CCH failsafe timeout: CCH_ENABLE=1")
-        # Re-establish healthy connection
-        send_health_for_seconds(3)
-        self.set_parameter("CCH_ENABLE", 1)
-        send_health_for_seconds(3)
-        # Stop sending to trigger timeout
-        self.wait_statustext("Companion Failsafe", timeout=10)
-        self.wait_mode("RTL")
-        self.end_subtest("Completed CCH timeout test")
+        def health_sender_loop():
+            while health_params["active"]:
+                send_companion_health(
+                    status_flags=health_params["status_flags"],
+                    services_status=health_params["services_status"],
+                    freeze_watchdog=health_params["freeze_watchdog"]
+                )
+                time.sleep(0.02) # 50Hz sending rate - robust to any speedup!
 
-        # Test 3: Recovery clears failsafe
-        self.start_subtest("CCH failsafe recovery")
-        # Send health to trigger recovery
-        send_companion_health()
-        self.wait_statustext("Companion Failsafe Cleared", timeout=10)
-        send_health_for_seconds(2)
-        self.change_mode("LOITER")
-        self.end_subtest("Completed CCH recovery test")
+        sender_thread = threading.Thread(target=health_sender_loop)
+        sender_thread.daemon = True
+        sender_thread.start()
 
-        # Test 4: CRITICAL state triggers failsafe
-        self.start_subtest("CCH failsafe CRITICAL state")
-        # Keep sending while waiting for disarm
-        tstart = self.get_sim_time()
-        while self.armed():
-            send_companion_health()
-            self.delay_sim_time(0.5)
-            if self.get_sim_time() - tstart > 120:
-                raise AutoTestTimeoutException("Failed to disarm")
-        send_health_for_seconds(2)
-        self.takeoffAndMoveAway()
-        send_health_for_seconds(2)
-        # Send OVERHEATING flag
-        send_companion_health(status_flags=0x02)
-        self.wait_statustext("Companion Failsafe", timeout=10)
-        self.wait_mode("RTL")
-        # Clear by sending healthy
-        send_companion_health(status_flags=0)
-        self.wait_statustext("Companion Failsafe Cleared", timeout=10)
-        self.land_and_disarm()
-        self.end_subtest("Completed CCH CRITICAL test")
+        try:
+            # Test 1: Disabled failsafe should take no action
+            self.start_subtest("CCH failsafe disabled: CCH_ENABLE=0")
+            self.set_parameter("CCH_ENABLE", 0)
+            self.delay_sim_time(2)
+            self.takeoffAndMoveAway()
+            # Temporarily stop thread to trigger silent timeout
+            health_params["active"] = False
+            self.delay_sim_time(5)
+            self.assert_mode("ALT_HOLD")
+            self.end_subtest("Completed CCH disabled test")
 
-        self.set_parameter("CCH_ENABLE", 0)
-        self.context_pop()
+            # Test 2: Timeout triggers RTL
+            self.start_subtest("CCH failsafe timeout: CCH_ENABLE=1")
+            # Restart background sending
+            health_params["active"] = True
+            sender_thread = threading.Thread(target=health_sender_loop)
+            sender_thread.daemon = True
+            sender_thread.start()
+            self.delay_sim_time(3)
+            self.set_parameter("CCH_ENABLE", 1)
+            self.delay_sim_time(3)
+            # Stop thread to trigger timeout
+            health_params["active"] = False
+            self.wait_statustext("Companion Failsafe", timeout=10)
+            self.wait_mode("RTL")
+            self.end_subtest("Completed CCH timeout test")
+
+            # Test 3: Recovery clears failsafe
+            self.start_subtest("CCH failsafe recovery")
+            # Restart background sending to recover
+            health_params["active"] = True
+            sender_thread = threading.Thread(target=health_sender_loop)
+            sender_thread.daemon = True
+            sender_thread.start()
+            self.wait_statustext("Companion Failsafe Cleared", timeout=10)
+            self.delay_sim_time(2)
+            self.change_mode("LOITER")
+            # Land and disarm cleanly (telemetry runs in background, so failsafe won't re-trigger)
+            self.land_and_disarm()
+            self.end_subtest("Completed CCH recovery test")
+
+            # Test 4: Status flag failsafe (DEGRADED - should not trigger FS)
+            self.progress("CCH Test 3: Status flag failsafe (DEGRADED)")
+            self.start_subtest("CCH failsafe degraded")
+            self.takeoffAndMoveAway()
+            self.delay_sim_time(2)
+            # Send LOW_DISK flag (warning only)
+            health_params["status_flags"] = 0x08
+            self.delay_sim_time(2)
+            if self.mav.flightmode == "RTL":
+                 raise AutoTestTimeoutException("Triggered failsafe on DEGRADED state")
+            # Clear flag
+            health_params["status_flags"] = 0
+            self.land_and_disarm()
+            self.end_subtest("Completed CCH degraded test")
+
+            # Test 5: Status flag failsafe (CRITICAL)
+            self.progress("CCH Test 4: Status flag failsafe (CRITICAL)")
+            self.start_subtest("CCH failsafe critical")
+            self.takeoffAndMoveAway()
+            self.delay_sim_time(2)
+            # Send OVERHEATING flag (critical)
+            health_params["status_flags"] = 0x02
+            self.wait_statustext("Companion Failsafe", timeout=10)
+            self.wait_mode("RTL")
+            # Clear flag
+            health_params["status_flags"] = 0
+            self.wait_statustext("Companion Failsafe Cleared", timeout=10)
+            self.land_and_disarm()
+            self.end_subtest("Completed CCH CRITICAL test")
+
+            # Test 6: Services mask failsafe
+            self.start_subtest("CCH failsafe services mask")
+            self.set_parameter("CCH_SVC_MASK", 1)  # Bit 0 must be 1
+            self.takeoffAndMoveAway()
+            self.delay_sim_time(2)
+            # Send services_status = 0 (missing bit 0), should trigger failsafe
+            health_params["services_status"] = 0
+            self.wait_statustext("Companion Failsafe", timeout=10)
+            self.wait_mode("RTL")
+            # Clear flag
+            health_params["services_status"] = 0xFFFFFFFF
+            self.wait_statustext("Companion Failsafe Cleared", timeout=10)
+            self.land_and_disarm()
+            self.set_parameter("CCH_SVC_MASK", 0)
+            self.end_subtest("Completed CCH services mask test")
+
+            # Test 7: Watchdog stall failsafe
+            self.progress("CCH Test 6: Watchdog stall")
+            self.start_subtest("CCH failsafe watchdog stall")
+            self.takeoffAndMoveAway()
+            self.delay_sim_time(2)
+            # Freeze the watchdog sequence
+            health_params["freeze_dog"] = True
+            # Map freeze_dog to freeze_watchdog parameter in loop
+            health_params["freeze_watchdog"] = True
+            self.wait_statustext("Companion Failsafe", timeout=10)
+            self.wait_mode("RTL")
+            # Unfreeze
+            health_params["freeze_watchdog"] = False
+            self.wait_statustext("Companion Failsafe Cleared", timeout=10)
+            self.land_and_disarm()
+            self.end_subtest("Completed CCH watchdog stall test")
+
+            # Test 8: Pre-arm check blocks arming when unhealthy
+            self.progress("CCH Test 8: Pre-arm check")
+            self.start_subtest("CCH pre-arm check")
+            # Enable failsafe/health check
+            self.set_parameter("CCH_ENABLE", 1)
+            self.delay_sim_time(2)
+            # Temporarily stop sending health, so state is DISCONNECTED (unhealthy)
+            health_params["active"] = False
+            self.delay_sim_time(5)
+            # Try to arm, should fail with companion unhealthy message!
+            self.try_arm(result=False, expect_msg="Companion Computer is not healthy")
+            
+            # Restart sending health to recover healthy state
+            health_params["active"] = True
+            sender_thread = threading.Thread(target=health_sender_loop)
+            sender_thread.daemon = True
+            sender_thread.start()
+            self.delay_sim_time(5)
+            # Change mode back to LOITER before arming (LAND mode is not armable)
+            self.change_mode("LOITER")
+            self.zero_throttle()
+            self.set_rc_default()
+            self.delay_sim_time(2)
+            # Try to arm, should succeed now!
+            self.arm_vehicle()
+            self.disarm_vehicle()
+            self.end_subtest("Completed CCH pre-arm test")
+
+        finally:
+            # Always ensure background thread is stopped on normal exit or exception
+            health_params["active"] = False
+            self.set_parameter("CCH_ENABLE", 0)
+            self.context_pop()
+
+        # Verify DataFlash logging
+        self.progress("Verifying CCH DataFlash logging")
+        self.assert_current_onboard_log_contains_message("CCH")
+        self.progress("CCH DataFlash logging verified")
+
         self.progress("All CCH failsafe tests complete")
 
     def CustomController(self, timeout=300):
