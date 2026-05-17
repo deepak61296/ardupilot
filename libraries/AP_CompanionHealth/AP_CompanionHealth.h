@@ -87,16 +87,22 @@ private:
     // parameters
     AP_Int8 _fs_enable;      // failsafe action (0=disabled, 1-7 same as GCS)
     AP_Float _fs_timeout;    // timeout in seconds before failsafe
+    AP_Int32 _svc_mask;      // bitmask of services that must be running
 
     // state
     uint32_t _last_msg_ms;          // timestamp of last received message
     uint32_t _last_report_ms;       // timestamp of last GCS status report
+    uint32_t _last_log_ms;          // timestamp of last DataFlash log
     uint16_t _last_watchdog_seq;    // last received watchdog sequence
+    uint32_t _watchdog_last_changed_ms; // timestamp when watchdog sequence last changed
     State _state;                   // current connection/health state
     CompanionStatus _status;        // latest received status
 
     // update state based on current metrics
     void update_state();
+
+    // log current health metrics
+    void Log_Write_CCH() const;
 };
 
 namespace AP {

@@ -19,6 +19,8 @@
 
 #include <AP_HAL/AP_HAL.h>
 #include <GCS_MAVLink/GCS.h>
+#include <AP_Logger/AP_Logger.h>
+#include "LogStructure.h"
 
 AP_CompanionHealth *AP_CompanionHealth::_singleton;
 
@@ -39,6 +41,13 @@ const AP_Param::GroupInfo AP_CompanionHealth::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("TIMEOUT", 2, AP_CompanionHealth, _fs_timeout, 5),
 
+    // @Param: SVC_MASK
+    // @DisplayName: Companion Computer Failsafe Service Mask
+    // @Description: Bitmask of services that must be running. If a service defined in this mask stops, it triggers a critical failsafe.
+    // @Bitmask: 0:Service0,1:Service1,2:Service2,3:Service3,4:Service4,5:Service5,6:Service6,7:Service7,8:Service8,9:Service9,10:Service10,11:Service11,12:Service12,13:Service13,14:Service14,15:Service15
+    // @User: Standard
+    AP_GROUPINFO("SVC_MASK", 3, AP_CompanionHealth, _svc_mask, 0),
+
     AP_GROUPEND
 };
 
@@ -50,7 +59,9 @@ AP_CompanionHealth::AP_CompanionHealth()
     // initialize state
     _last_msg_ms = 0;
     _last_report_ms = 0;
+    _last_log_ms = 0;
     _last_watchdog_seq = 0;
+    _watchdog_last_changed_ms = 0;
     _state = State::DISCONNECTED;
     memset(&_status, 0, sizeof(_status));
 }
@@ -88,6 +99,9 @@ void AP_CompanionHealth::handle_message(const mavlink_message_t &msg)
     _status.gpu_load = packet.gpu_load;
     _status.status_flags = packet.status_flags;
 
+    if (was_never_connected || _last_watchdog_seq != packet.watchdog_seq) {
+        _watchdog_last_changed_ms = AP_HAL::millis();
+    }
     _last_watchdog_seq = packet.watchdog_seq;
     _last_msg_ms = AP_HAL::millis();
 
@@ -113,8 +127,9 @@ void AP_CompanionHealth::update_state()
     // check for critical conditions
     const bool is_overheating = (_status.status_flags & STATUS_FLAG_OVERHEATING) != 0;
     const bool any_flag_set = (_status.status_flags & 0x0F) != 0;
+    const bool service_failed = (~_status.services_status & _svc_mask) != 0;
 
-    if (is_overheating || _status.cpu_load > 95 || _status.memory_used > 95 || _status.temperature > 900) {
+    if (is_overheating || _status.cpu_load > 95 || _status.memory_used > 95 || _status.temperature > 900 || service_failed) {
         _state = State::CRITICAL;
     } else if (any_flag_set || _status.cpu_load > 80 || _status.memory_used > 80 || _status.temperature > 750) {
         _state = State::DEGRADED;
@@ -137,6 +152,8 @@ void AP_CompanionHealth::update()
     // check for timeout
     if (age_ms > timeout_ms) {
         _state = State::DISCONNECTED;
+    } else if (now_ms - _watchdog_last_changed_ms > timeout_ms) {
+        _state = State::CRITICAL; // frozen thread
     }
 
     // send periodic status report every 10 seconds
@@ -145,6 +162,32 @@ void AP_CompanionHealth::update()
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Companion [%s]: CPU %d%% Mem %d%% Temp %.1fC",
                       get_state_name(), _status.cpu_load, _status.memory_used, _status.temperature * 0.1f);
     }
+
+    // log health metrics at 1Hz
+    if (now_ms - _last_log_ms >= 1000) {
+        _last_log_ms = now_ms;
+        Log_Write_CCH();
+    }
+}
+
+void AP_CompanionHealth::Log_Write_CCH() const
+{
+#if HAL_LOGGING_ENABLED
+    const struct log_CCH pkt{
+        LOG_PACKET_HEADER_INIT(LOG_CCH_MSG),
+        time_us         : AP_HAL::micros64(),
+        state           : (uint8_t)_state,
+        services_status : _status.services_status,
+        watchdog_seq    : _status.watchdog_seq,
+        temperature     : _status.temperature,
+        cpu_load        : _status.cpu_load,
+        memory_used     : _status.memory_used,
+        disk_used       : _status.disk_used,
+        gpu_load        : _status.gpu_load,
+        status_flags    : _status.status_flags
+    };
+    AP::logger().WriteBlock(&pkt, sizeof(pkt));
+#endif
 }
 
 namespace AP {
