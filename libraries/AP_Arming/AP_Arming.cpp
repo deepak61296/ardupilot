@@ -71,6 +71,7 @@
 #endif
 
 #include <AP_Logger/AP_Logger.h>
+#include <AP_CompanionHealth/AP_CompanionHealth.h>
 
 #define AP_ARMING_COMPASS_MAGFIELD_EXPECTED 530
 #define AP_ARMING_COMPASS_MAGFIELD_MIN  185     // 0.35 * 530 milligauss
@@ -1755,6 +1756,7 @@ bool AP_Arming::pre_arm_checks(bool report)
         & crashdump_checks(report)
 #endif
         &  serial_protocol_checks(report)
+        &  companion_health_checks(report)
         &  estop_checks(report);
 
     if (!checks_result && last_prearm_checks_result) { // check went from true to false
@@ -2078,6 +2080,18 @@ bool AP_Arming::disarm_switch_checks(bool display_failure) const
     return true;
 }
 #endif  // AP_RC_CHANNEL_ENABLED
+
+bool AP_Arming::companion_health_checks(bool report) const
+{
+#if AP_COMPANION_HEALTH_ENABLED
+    const AP_CompanionHealth *ch = AP::companion_health();
+    if (ch != nullptr && ch->get_failsafe_action() > 0 && !ch->is_healthy()) {
+        check_failed(report, "Companion Computer is not healthy");
+        return false;
+    }
+#endif
+    return true;
+}
 
 #if HAL_LOGGING_ENABLED
 void AP_Arming::Log_Write_Arm(const bool forced, const AP_Arming::Method method)
