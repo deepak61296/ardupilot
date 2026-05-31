@@ -1397,7 +1397,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             health_params["status_flags"] = 0x08
             self.delay_sim_time(2)
             if self.mav.flightmode == "RTL":
-                 raise AutoTestTimeoutException("Triggered failsafe on DEGRADED state")
+                raise AutoTestTimeoutException("Triggered failsafe on DEGRADED state")
             # Clear flag
             health_params["status_flags"] = 0
             self.land_and_disarm()
@@ -1462,7 +1462,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             self.delay_sim_time(5)
             # Try to arm, should fail with companion unhealthy message!
             self.try_arm(result=False, expect_msg="Companion Computer is not healthy")
-            
+
             # Restart sending health to recover healthy state
             health_params["active"] = True
             sender_thread = threading.Thread(target=health_sender_loop)
