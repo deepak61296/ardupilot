@@ -89,6 +89,7 @@ public:
         AUTO_ARM_ONCE = 36,
         TURTLE_MODE = 37,
         TOYMODE = 38,
+        COMPANIONFAILSAFE = 39,
         UNKNOWN = 100,
     };
 
@@ -278,6 +279,8 @@ protected:
 
     bool visodom_checks(bool report) const;
     bool disarm_switch_checks(bool report) const;
+
+    bool companion_health_checks(bool report) const;
 
     // mandatory checks that cannot be bypassed.  This function will only be called if ARMING_SKIPCHK skips all or arming forced
     virtual bool mandatory_checks(bool report);
