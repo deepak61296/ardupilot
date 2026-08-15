@@ -3,6 +3,7 @@
 #include "GCS_MAVLink_Copter.h"
 #include <AP_RPM/AP_RPM_config.h>
 #include <AP_EFI/AP_EFI_config.h>
+#include <AP_CompanionHealth/AP_CompanionHealth.h>
 
 MAV_TYPE GCS_Copter::frame_type() const
 {
@@ -1195,6 +1196,11 @@ void GCS_MAVLINK_Copter::handle_message(const mavlink_message_t &msg)
 #if TOY_MODE_ENABLED
     case MAVLINK_MSG_ID_NAMED_VALUE_INT:
         copter.g2.toy_mode.handle_message(msg);
+        break;
+#endif
+#if AP_COMPANION_HEALTH_ENABLED
+    case MAVLINK_MSG_ID_COMPANION_HEALTH:
+        copter.g2.companion_health.handle_message(msg);
         break;
 #endif
     default:

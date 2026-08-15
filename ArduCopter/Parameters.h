@@ -6,6 +6,7 @@
 #include "RC_Channel_Copter.h"
 #include <AP_Proximity/AP_Proximity.h>
 #include <AP_SurfaceDistance/AP_SurfaceDistance.h>
+#include <AP_CompanionHealth/AP_CompanionHealth.h>
 
 class ModeRTL;
 
@@ -736,6 +737,10 @@ public:
     void *mode_poshold_ptr;
 #endif
 
+#if AP_COMPANION_HEALTH_ENABLED
+    // companion computer health monitoring
+    AP_CompanionHealth companion_health;
+#endif
 };
 
 extern const AP_Param::Info        var_info[];

@@ -1185,6 +1185,12 @@ const AP_Param::GroupInfo ParametersG2::var_info2[] = {
     AP_GROUPINFO("SURFTRAK_GLSAM", 22, ParametersG2, surf_dist_parameters.glitch_num_samples, AP_SURFACEDISTANCE_GLITCH_NUM_SAMPLES_DEFAULT),
 #endif
 
+#if AP_COMPANION_HEALTH_ENABLED
+    // @Group: CCH_
+    // @Path: ../libraries/AP_CompanionHealth/AP_CompanionHealth.cpp
+    AP_SUBGROUPINFO(companion_health, "CCH_", 60, ParametersG2, AP_CompanionHealth),
+#endif
+
     // ID 62 is reserved for the AP_SUBGROUPEXTENSION
 
     AP_GROUPEND

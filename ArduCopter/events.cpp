@@ -1,4 +1,5 @@
 #include "Copter.h"
+#include <AP_CompanionHealth/AP_CompanionHealth.h>
 
 /*
  *       This event will be called when the failsafe changes
@@ -238,6 +239,105 @@ void Copter::failsafe_gcs_off_event(void)
     gcs().send_text(MAV_SEVERITY_WARNING, "GCS Failsafe Cleared");
     LOGGER_WRITE_ERROR(LogErrorSubsystem::FAILSAFE_GCS, LogErrorCode::FAILSAFE_RESOLVED);
 }
+
+#if AP_COMPANION_HEALTH_ENABLED
+// failsafe_companion_check - check for companion computer failsafe
+void Copter::failsafe_companion_check()
+{
+    // skip all processing if companion failsafe is disabled
+    if (g2.companion_health.get_failsafe_action() == 0) {
+        return;
+    }
+
+    // update companion health state
+    g2.companion_health.update();
+
+    // check if failsafe should be enabled or disabled
+    if (!g2.companion_health.has_ever_connected()) {
+        // never connected, don't trigger failsafe
+        return;
+    }
+
+    const bool healthy = g2.companion_health.is_healthy();
+
+    if (healthy && failsafe.companion) {
+        // recovery from companion failsafe
+        failsafe.companion = false;
+        failsafe_companion_off_event();
+    } else if (!healthy && !failsafe.companion) {
+        // new companion failsafe
+        failsafe.companion = true;
+        failsafe_companion_on_event();
+    }
+}
+
+// failsafe_companion_on_event - actions to take when companion computer contact is lost
+void Copter::failsafe_companion_on_event()
+{
+    LOGGER_WRITE_ERROR(LogErrorSubsystem::FAILSAFE_COMPANION, LogErrorCode::FAILSAFE_OCCURRED);
+    RC_Channels::clear_overrides();
+
+    // convert the desired failsafe response to the FailsafeAction enum
+    // using same values as GCS failsafe
+    FailsafeAction desired_action;
+    switch ((FS_GCS_Action)g2.companion_health.get_failsafe_action()) {
+        case FS_GCS_Action::ALWAYS_RTL:
+        case FS_GCS_Action::CONTINUE_MISSION:
+            desired_action = FailsafeAction::RTL;
+            break;
+        case FS_GCS_Action::ALWAYS_SMARTRTL_OR_RTL:
+            desired_action = FailsafeAction::SMARTRTL;
+            break;
+        case FS_GCS_Action::ALWAYS_SMARTRTL_OR_LAND:
+            desired_action = FailsafeAction::SMARTRTL_LAND;
+            break;
+        case FS_GCS_Action::ALWAYS_LAND:
+            desired_action = FailsafeAction::LAND;
+            break;
+        case FS_GCS_Action::AUTO_RTL_OR_RTL:
+            desired_action = FailsafeAction::AUTO_DO_LAND_START;
+            break;
+        case FS_GCS_Action::BRAKE_OR_LAND:
+            desired_action = FailsafeAction::BRAKE_LAND;
+            break;
+        case FS_GCS_Action::DISABLED:
+        default:
+            desired_action = FailsafeAction::RTL;
+    }
+
+    // conditions to deviate from parameter setting
+    if (!motors->armed()) {
+        desired_action = FailsafeAction::NONE;
+        announce_failsafe("Companion");
+
+    } else if (should_disarm_on_failsafe()) {
+        arming.disarm(AP_Arming::Method::COMPANIONFAILSAFE);
+        desired_action = FailsafeAction::NONE;
+        announce_failsafe("Companion", "Disarming");
+
+    } else if (flightmode->is_landing() && ((battery.has_failsafed() && battery.get_highest_failsafe_priority() <= FAILSAFE_LAND_PRIORITY))) {
+        // Allow landing to continue when battery failsafe requires it (not a user option)
+        announce_failsafe("Companion + Battery", "Continuing Landing");
+        desired_action = FailsafeAction::LAND;
+
+    } else if (flightmode->is_landing() && failsafe_option(FailsafeOption::CONTINUE_IF_LANDING)) {
+        announce_failsafe("Companion", "Continuing Landing");
+        desired_action = FailsafeAction::LAND;
+
+    } else {
+        announce_failsafe("Companion");
+    }
+
+    do_failsafe_action(desired_action, ModeReason::COMPANION_FAILSAFE);
+}
+
+// failsafe_companion_off_event - actions to take when companion computer contact is restored
+void Copter::failsafe_companion_off_event()
+{
+    gcs().send_text(MAV_SEVERITY_WARNING, "Companion Failsafe Cleared");
+    LOGGER_WRITE_ERROR(LogErrorSubsystem::FAILSAFE_COMPANION, LogErrorCode::FAILSAFE_RESOLVED);
+}
+#endif  // AP_COMPANION_HEALTH_ENABLED
 
 // executes terrain failsafe if data is missing for longer than a few seconds
 void Copter::failsafe_terrain_check()

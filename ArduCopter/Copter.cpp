@@ -747,6 +747,11 @@ void Copter::three_hz_loop()
     // check for deadreckoning failsafe
     failsafe_deadreckon_check();
 
+#if AP_COMPANION_HEALTH_ENABLED
+    // check if we've lost contact with companion computer
+    failsafe_companion_check();
+#endif
+
 #if AP_RC_TRANSMITTER_TUNING_ENABLED
     //update transmitter based in flight tuning
     tuning();
