@@ -153,6 +153,7 @@ const struct MultiplierStructure log_Multipliers[] = {
 #include <AP_HAL/LogStructure.h>
 #include <AP_Mission/LogStructure.h>
 #include <AP_Servo_Telem/LogStructure.h>
+#include <AP_CompanionHealth/LogStructure.h>
 
 #include <AP_RTC/AP_RTC_config.h>
 
@@ -1271,6 +1272,7 @@ LOG_STRUCTURE_FROM_VISUALODOM \
 LOG_STRUCTURE_FROM_AIS \
     { LOG_SCRIPTING_MSG, sizeof(log_Scripting), \
       "SCR",   "QNIii", "TimeUS,Name,Runtime,Total_mem,Run_mem", "s#sbb", "F-F--", true }, \
+LOG_STRUCTURE_FROM_COMPANION_HEALTH \
     { LOG_VER_MSG, sizeof(log_VER), \
       "VER",   "QBHBBBBIZHBBII", "TimeUS,BT,BST,Maj,Min,Pat,FWT,GH,FWS,APJ,BU,FV,IMI,ICI", "s-------------", "F-------------", false }, \
     { LOG_MOTBATT_MSG, sizeof(log_MotBatt), \
@@ -1358,6 +1360,7 @@ enum LogMessages : uint8_t {
     LOG_IDS_FROM_AC_ATTITUDECONTROL,
     LOG_IDS_FROM_PRECLAND,
     LOG_IDS_FROM_AIS,
+    LOG_IDS_FROM_COMPANION_HEALTH,
     LOG_STAK_MSG,
     LOG_FILE_MSG,
     LOG_SCRIPTING_MSG,
