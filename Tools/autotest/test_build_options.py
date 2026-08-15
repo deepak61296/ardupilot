@@ -369,6 +369,10 @@ class TestBuildOptions(object):
             # only Rover and Copter instantiate Beacon
             feature_define_whitelist.add('AP_BEACON_ENABLED')
 
+        if target.lower() != "copter":
+            # only Copter consumes companion health messages
+            feature_define_whitelist.add('AP_COMPANION_HEALTH_ENABLED')
+
         if target.lower() != "rover":
             # only on Rover:
             feature_define_whitelist.add('HAL_TORQEEDO_ENABLED')
