@@ -27,8 +27,8 @@ AP_CompanionHealth *AP_CompanionHealth::_singleton;
 const AP_Param::GroupInfo AP_CompanionHealth::var_info[] = {
     // @Param: ENABLE
     // @DisplayName: Companion Computer Failsafe Enable
-    // @Description: Action to take when companion computer stops sending health messages. Uses same values as GCS failsafe.
-    // @Values: 0:Disabled/NoAction,1:RTL,2:RTL or Continue with Mission in Auto Mode (Removed in 4.0+-see FS_OPTIONS),3:SmartRTL or RTL,4:SmartRTL or Land,5:Land,6:Auto DO_LAND_START/DO_RETURN_PATH_START or RTL,7:Brake or Land
+    // @Description: Action to take when the companion computer is unhealthy: no message for CCH_TIMEOUT seconds, a frozen watchdog sequence, a critical resource report, or a required service stopped. Uses the same action values as FS_GCS_ENABLE.
+    // @Values: 0:Disabled/NoAction,1:RTL,3:SmartRTL or RTL,4:SmartRTL or Land,5:Land,6:Auto DO_LAND_START/DO_RETURN_PATH_START or RTL,7:Brake or Land
     // @User: Standard
     AP_GROUPINFO("ENABLE", 1, AP_CompanionHealth, _fs_enable, 0),
 
@@ -43,7 +43,7 @@ const AP_Param::GroupInfo AP_CompanionHealth::var_info[] = {
 
     // @Param: SVC_MASK
     // @DisplayName: Companion Computer Failsafe Service Mask
-    // @Description: Bitmask of services that must be running. If a service defined in this mask stops, it triggers a critical failsafe.
+    // @Description: Bitmask of companion services that must be running. Bit N corresponds to the Nth entry of the service list configured on the companion computer. If a required service stops being reported the failsafe triggers. 0 disables the check.
     // @Bitmask: 0:Service0,1:Service1,2:Service2,3:Service3,4:Service4,5:Service5,6:Service6,7:Service7,8:Service8,9:Service9,10:Service10,11:Service11,12:Service12,13:Service13,14:Service14,15:Service15,16:Service16,17:Service17,18:Service18,19:Service19,20:Service20,21:Service21,22:Service22,23:Service23,24:Service24,25:Service25,26:Service26,27:Service27,28:Service28,29:Service29,30:Service30,31:Service31
     // @User: Standard
     AP_GROUPINFO("SVC_MASK", 3, AP_CompanionHealth, _svc_mask, 0),
