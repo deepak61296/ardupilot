@@ -1188,7 +1188,7 @@ const AP_Param::GroupInfo ParametersG2::var_info2[] = {
 #if AP_COMPANION_HEALTH_ENABLED
     // @Group: CCH_
     // @Path: ../libraries/AP_CompanionHealth/AP_CompanionHealth.cpp
-    AP_SUBGROUPINFO(companion_health, "CCH_", 60, ParametersG2, AP_CompanionHealth),
+    AP_SUBGROUPINFO(companion_health, "CCH_", 23, ParametersG2, AP_CompanionHealth),
 #endif
 
     // ID 62 is reserved for the AP_SUBGROUPEXTENSION
