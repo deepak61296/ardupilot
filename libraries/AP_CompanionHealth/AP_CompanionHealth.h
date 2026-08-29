@@ -65,7 +65,7 @@ public:
 
     // true when an unhealthy companion should trigger a failsafe action.
     // warn only (-1) monitors, logs and reports without taking the vehicle,
-    // following the -1:Warn only convention used by Q_LAND_ACTION
+    // following the -1:Warn only convention used by Q_TRANS_FAIL_ACT
     bool failsafe_enabled() const { return _fs_enable > 0; }
 
     // latest companion status (for logging and GCS display)
