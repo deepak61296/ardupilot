@@ -244,13 +244,24 @@ void Copter::failsafe_gcs_off_event(void)
 // failsafe_companion_check - check for companion computer failsafe
 void Copter::failsafe_companion_check()
 {
-    // skip all processing if companion failsafe is disabled
-    if (g2.companion_health.get_failsafe_action() == 0) {
+    // skip all processing if companion monitoring is disabled
+    if (!g2.companion_health.monitoring_enabled()) {
         return;
     }
 
     // update companion health state
     g2.companion_health.update();
+
+    // warn only mode reports state and logs it but never takes the vehicle
+    if (!g2.companion_health.failsafe_enabled()) {
+        if (failsafe.companion) {
+            // clear a failsafe that latched before the action was set to warn only,
+            // so the vehicle does not report MAV_STATE_CRITICAL forever
+            failsafe.companion = false;
+            failsafe_companion_off_event();
+        }
+        return;
+    }
 
     // check if failsafe should be enabled or disabled
     if (!g2.companion_health.has_ever_connected()) {
