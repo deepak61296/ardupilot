@@ -1938,6 +1938,59 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             self.land_and_disarm()
             self.end_subtest("Completed CCH timeout edge test")
 
+            # Test 12: Warn only (-1) reports state but never takes the vehicle.
+            # The flying half proves no action past the timeout; the ground half
+            # proves the pre-arm exemption while DISCONNECTED, which an action
+            # value would block, and that switching modes clears a latched
+            # failsafe without a reboot.
+            self.start_subtest("CCH warn only: CCH_ENABLE=-1")
+            self.set_parameter("CCH_ENABLE", -1)
+            self.delay_sim_time(3, reason="warn only mode to take effect")
+            self.takeoffAndMoveAway()
+            self.delay_sim_time(2, reason="telemetry to settle after takeoff")
+
+            # state machine still runs, so a DEGRADED report is still announced
+            health_params["status_flags"] = 0x08
+            self.wait_statustext("Companion [DEGRADED]", timeout=10)
+            health_params["status_flags"] = 0
+            self.wait_statustext("Companion [HEALTHY]", timeout=10)
+
+            # losing the companion entirely is reported but must not act
+            health_params["active"] = False
+            self.wait_statustext("Companion [DISCONNECTED]", timeout=15)
+            self.delay_sim_time(5, reason="well past CCH_TIMEOUT in warn only")
+            self.assert_mode("ALT_HOLD")
+            m = self.assert_receive_message('HEARTBEAT')
+            if m.system_status == mavutil.mavlink.MAV_STATE_CRITICAL:
+                raise NotAchievedException("warn only must not report MAV_STATE_CRITICAL")
+            self.land_and_disarm()
+
+            # the pre-arm gate must not block while still disconnected
+            self.change_mode("LOITER")
+            self.zero_throttle()
+            self.set_rc_default()
+            self.delay_sim_time(2, reason="RC and mode changes to settle")
+            self.arm_vehicle()
+            self.disarm_vehicle()
+
+            # switching to an action value re-engages the failsafe and the gate.
+            # The latch fires within one 3Hz tick of the param write, so collect
+            # status texts from before the set to avoid racing it.
+            self.context_collect('STATUSTEXT')
+            self.set_parameter("CCH_ENABLE", 1)
+            self.wait_statustext("Companion Failsafe", timeout=10, check_context=True)
+            self.try_arm(result=False, expect_msg="Companion Computer is not healthy")
+
+            # and back to warn only clears the latched failsafe without a reboot
+            self.set_parameter("CCH_ENABLE", -1)
+            self.wait_statustext("Companion Failsafe Cleared", timeout=10, check_context=True)
+            self.context_stop_collecting('STATUSTEXT')
+            self.arm_vehicle()
+            self.disarm_vehicle()
+            start_health_sender()
+            self.delay_sim_time(3, reason="companion to return healthy")
+            self.end_subtest("Completed CCH warn only test")
+
         finally:
             # Always ensure background thread is stopped on normal exit or exception
             health_params["active"] = False
