@@ -2118,7 +2118,7 @@ bool AP_Arming::companion_health_checks(bool report) const
 {
 #if AP_COMPANION_HEALTH_ENABLED && APM_BUILD_COPTER_OR_HELI
     const AP_CompanionHealth *ch = AP::companion_health();
-    if (ch != nullptr && ch->get_failsafe_action() > 0 && !ch->is_healthy()) {
+    if (ch != nullptr && ch->failsafe_enabled() && !ch->is_healthy()) {
         check_failed(report, "Companion Computer is not healthy");
         return false;
     }
