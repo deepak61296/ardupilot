@@ -57,8 +57,16 @@ public:
     const char* get_state_name() const;
     uint32_t last_message_age_ms() const;
 
-    // get failsafe enable parameter value (same values as GCS failsafe)
+    // get failsafe enable parameter value (0=disabled, -1=warn only, 1-7 as FS_GCS_ENABLE)
     int8_t get_failsafe_action() const { return _fs_enable; }
+
+    // true when the companion is monitored at all
+    bool monitoring_enabled() const { return _fs_enable != 0; }
+
+    // true when an unhealthy companion should trigger a failsafe action.
+    // warn only (-1) monitors, logs and reports without taking the vehicle,
+    // following the -1:Warn only convention used by Q_LAND_ACTION
+    bool failsafe_enabled() const { return _fs_enable > 0; }
 
     // latest companion status (for logging and GCS display)
     struct CompanionStatus {
@@ -97,7 +105,7 @@ private:
     static constexpr float TIMEOUT_MAX_MS = 120000.0f;
 
     // parameters
-    AP_Int8 _fs_enable;      // failsafe action (0=disabled, 1-7 same as GCS)
+    AP_Int8 _fs_enable;      // failsafe action (0=disabled, -1=warn only, 1-7 same as GCS)
     AP_Float _fs_timeout;    // timeout in seconds before failsafe
     AP_Int32 _svc_mask;      // bitmask of services that must be running
 

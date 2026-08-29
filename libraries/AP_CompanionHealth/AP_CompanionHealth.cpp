@@ -27,8 +27,8 @@ AP_CompanionHealth *AP_CompanionHealth::_singleton;
 const AP_Param::GroupInfo AP_CompanionHealth::var_info[] = {
     // @Param: ENABLE
     // @DisplayName: Companion Computer Failsafe Enable
-    // @Description: Action to take when the companion computer is unhealthy: no message for CCH_TIMEOUT seconds, a frozen watchdog sequence, a critical resource report, or a required service stopped. Uses the same action values as FS_GCS_ENABLE.
-    // @Values: 0:Disabled/NoAction,1:RTL,3:SmartRTL or RTL,4:SmartRTL or Land,5:Land,6:Auto DO_LAND_START/DO_RETURN_PATH_START or RTL,7:Brake or Land
+    // @Description: Action to take when the companion computer is unhealthy: no message for CCH_TIMEOUT seconds, a frozen watchdog sequence, a critical resource report, or a required service stopped. Uses the same action values as FS_GCS_ENABLE. Warn only monitors, logs and reports the companion without ever taking the vehicle or blocking arming.
+    // @Values: -1:Warn only,0:Disabled/NoAction,1:RTL,3:SmartRTL or RTL,4:SmartRTL or Land,5:Land,6:Auto DO_LAND_START/DO_RETURN_PATH_START or RTL,7:Brake or Land
     // @User: Standard
     AP_GROUPINFO("ENABLE", 1, AP_CompanionHealth, _fs_enable, 0),
 
